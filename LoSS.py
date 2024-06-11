@@ -9,9 +9,10 @@ import platform
 import urllib.request
 import zipfile
 import argparse
+import tempfile
 
 # Load the Whisper model once
-model = whisper.load_model("base")
+model = whisper.load_model("tiny")
 
 # Check if yt-dlp is installed, if not install it
 def check_install_yt_dlp():
@@ -140,6 +141,56 @@ def convert_video_to_audio(video_file):
     subprocess.run(command, check=True)
     return audio_file
 
+def split_text_into_chunks_to_files(text, chunk_size=14000, overlap=2000):
+    tokens = text.split()
+    chunk_files = []
+    start = 0
+    while start < len(tokens):
+        end = start + chunk_size
+        chunk = " ".join(tokens[start:end])
+        temp_file = tempfile.NamedTemporaryFile(delete=False, mode='w+', encoding='utf-8')
+        temp_file.write(chunk)
+        temp_file.close()
+        chunk_files.append(temp_file.name)
+        start += chunk_size - overlap
+    return chunk_files
+
+async def summarize_chunk_files(api_key, chunk_files):
+    summaries = []
+    semaphore = asyncio.Semaphore(5)
+    async with aiohttp.ClientSession() as session:
+        for file_path in chunk_files:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                chunk = f.read()
+            summary = await async_summarize_text(api_key, chunk, session, semaphore)
+            summaries.append(summary)
+    return summaries
+
+async def hierarchical_summarize(api_key, text):
+    # Step 1: Initial chunking to files and summarization
+    chunk_files = split_text_into_chunks_to_files(text)
+    first_level_summaries = await summarize_chunk_files(api_key, chunk_files)
+    
+    # Clean up temporary files
+    for file_path in chunk_files:
+        os.remove(file_path)
+    
+    # Step 2: Combine summaries
+    combined_summary = " ".join(first_level_summaries)
+    
+    # Step 3: Check if combined summary exceeds token limit
+    if len(combined_summary.split()) > 15000:
+        combined_chunk_files = split_text_into_chunks_to_files(combined_summary)
+        final_summary = await summarize_chunk_files(api_key, combined_chunk_files)
+        
+        # Clean up temporary files
+        for file_path in combined_chunk_files:
+            os.remove(file_path)
+        
+        return " ".join(final_summary)
+    else:
+        return combined_summary
+
 # Main function to orchestrate the processing
 async def main(api_key):
     # Check and install yt-dlp and ffmpeg if necessary
@@ -194,10 +245,21 @@ async def main(api_key):
         print("No audio or text file found in the directory.")
         return
 
-    # Summarize the transcript
+    # Save the transcript and ask for user confirmation before summarizing
+    with open(os.path.join("output", "transcript.txt"), "w", encoding="utf-8") as f:
+        f.write(transcript)
+    print("Transcript saved to output/transcript.txt")
+    
+    # Ask user if they want to summarize the transcript
+    summarize_choice = input("Do you want to summarize the transcript? (yes/no): ").strip().lower()
+    if summarize_choice != 'yes':
+        print("Skipping summarization.")
+        return
+
+    # Summarize the transcript using hierarchical summarization
     semaphore = asyncio.Semaphore(5)
     async with aiohttp.ClientSession() as session:
-        summary = await async_summarize_text(api_key, transcript, session, semaphore)
+        summary = await hierarchical_summarize(api_key, transcript)
         filename = await generate_unique_filename(api_key, session, semaphore)
 
     # Save the summary with a unique filename
