@@ -23,16 +23,15 @@ Install Python and requirements.txt stuff.
 3. **Step 3**: Navigate to the project directory. If you can't do that, I'm not sure if I can help you.
 4. **Step 4**: Now, install the dependencies with this magical incantation: **pip install -r requirements.txt**
 
-
-  ```sh
+```sh
     cd path/to/your/project
-    ```
+```
 
 4. **Step 4**: Now, install the dependencies with this magical incantation:
 
-    ```sh
+```sh
     pip install -r requirements.txt
-    ```
+```
 
 If something goes wrong, don't panic! Just remember: Google is your best friend. Or your only friend when it comes to debugging. 💻
 
