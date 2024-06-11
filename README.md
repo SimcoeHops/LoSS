@@ -36,13 +36,12 @@ Create and activate a virtual environment:
 For Windows:
 ```sh
 python -m venv venv
-.
-env\Scripts ctivate
+venv\scripts\activate
 ```
 
 For MacOS/Linux:
 ```sh
-python3 -m venv venv
+python -m venv venv
 source venv/bin/activate
 ```
 
