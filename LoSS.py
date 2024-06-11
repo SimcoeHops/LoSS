@@ -32,10 +32,13 @@ def check_install_ffmpeg():
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                 zip_ref.extractall("ffmpeg")
             os.remove(zip_path)
-            bin_path = os.path.join("ffmpeg", "ffmpeg-2023-03-27-git-7367e1b184-full_build", "bin")
-            shutil.copy(os.path.join(bin_path, "ffmpeg.exe"), os.getcwd())
-            shutil.copy(os.path.join(bin_path, "ffplay.exe"), os.getcwd())
-            shutil.copy(os.path.join(bin_path, "ffprobe.exe"), os.getcwd())
+            bin_path = find_ffmpeg_bin_path("ffmpeg")
+            if bin_path:
+                shutil.copy(os.path.join(bin_path, "ffmpeg.exe"), os.getcwd())
+                shutil.copy(os.path.join(bin_path, "ffplay.exe"), os.getcwd())
+                shutil.copy(os.path.join(bin_path, "ffprobe.exe"), os.getcwd())
+            else:
+                raise FileNotFoundError("ffmpeg binaries not found after extraction.")
         elif platform.system() == "Linux":
             subprocess.run(["sudo", "apt-get", "install", "-y", "ffmpeg"], check=True)
         elif platform.system() == "Darwin":  # macOS
@@ -43,6 +46,12 @@ def check_install_ffmpeg():
         else:
             raise Exception("Unsupported OS for automatic ffmpeg installation")
         print("ffmpeg installed")
+
+def find_ffmpeg_bin_path(root_dir):
+    for root, dirs, files in os.walk(root_dir):
+        if "ffmpeg.exe" in files:
+            return root
+    return None
 
 # Asynchronous function to call the OpenAI API for summarization
 async def async_summarize_text(api_key, text, session, semaphore=None):
