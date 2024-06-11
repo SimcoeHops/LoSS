@@ -4,7 +4,9 @@ Welcome to **LoSS** (Lots of Stuff Summarizer)!
 
 ## What Does This Script Do? 🤔
 
-LoSS is a crude Python script designed to create and/or digest a wall of text, create a transcript, and send it to the OpenAI API using GPT 3.5 Turbo (by default, but feel free to change it to GPT4o if you've got deep pockets) in order to create an AI summary. Make sure you pip install requirements.txt, as this script depends on a few python libraries as well as ffmpeg and yt-dlp.
+LoSS is a crude Python script designed to create and/or digest a wall of text, create a transcript using OpenAI's Whisper model, and send it to the OpenAI API using GPT 3.5 Turbo (by default, but feel free to change it to GPT4o if you've got deep pockets) in order to create an AI summary. Make sure you pip install requirements.txt, as this script depends on a few python libraries as well as ffmpeg and yt-dlp.
+
+Once you've downloaded the repository, you'll notice it contains an **input** folder and an **output** folder. If you want to transcribe and summarize a video file or an audio file, or want a summary of a text file, place it in the **input** folder. When the summary is complete, it will appear in the **output** folder.
 
 ## Setup Instructions
 
