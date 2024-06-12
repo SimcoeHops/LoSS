@@ -13,7 +13,7 @@ import argparse
 import tempfile
 
 # Load the Whisper model once
-model = whisper.load_model("tiny")
+model = whisper.load_model("medium")
 
 # Check if yt-dlp is installed, if not install it
 def check_install_yt_dlp():
@@ -80,7 +80,7 @@ async def async_summarize_text(api_key, text, session, semaphore=None):
                                                        "Please let me know if you need any clarification or additional guidance before proceeding.")},
                         {"role": "user", "content": text}
                     ],
-                    "max_tokens": 1000,
+                    "max_tokens": 3000,  # Set this to a safe value below the limit
                     "temperature": 0.6
                 },
                 timeout=aiohttp.ClientTimeout(total=60)
@@ -94,6 +94,7 @@ async def async_summarize_text(api_key, text, session, semaphore=None):
         except Exception as e:
             print(f"Error summarizing text: {e}")
             return ""
+
 
 # Asynchronous function to generate a unique filename
 async def generate_unique_filename(api_key, session, semaphore=None):
@@ -142,7 +143,7 @@ def convert_video_to_audio(video_file):
     subprocess.run(command, check=True)
     return audio_file
 
-def split_text_into_chunks_to_files(text, chunk_size=14000, overlap=2000):
+def split_text_into_chunks_to_files(text, chunk_size=3000, overlap=500):
     tokens = text.split()
     chunk_files = []
     start = 0
@@ -155,6 +156,7 @@ def split_text_into_chunks_to_files(text, chunk_size=14000, overlap=2000):
         chunk_files.append(temp_file.name)
         start += chunk_size - overlap
     return chunk_files
+
 
 async def summarize_chunk_files(api_key, chunk_files):
     summaries = []
@@ -180,7 +182,7 @@ async def hierarchical_summarize(api_key, text):
     combined_summary = " ".join(first_level_summaries)
     
     # Step 3: Check if combined summary exceeds token limit
-    if len(combined_summary.split()) > 15000:
+    if len(combined_summary.split()) > 3000:  # Adjust this limit accordingly
         combined_chunk_files = split_text_into_chunks_to_files(combined_summary)
         final_summary = await summarize_chunk_files(api_key, combined_chunk_files)
         
