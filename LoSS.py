@@ -12,9 +12,21 @@ import zipfile
 import argparse
 import tempfile
 import random
+import nltk
+import torch
+import logging
 
-# Load the Whisper model once
-model = whisper.load_model("medium")
+# Configure logging
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Download NLTK data
+nltk.download('punkt')
+
+# Check if a GPU is available
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+# Load the Whisper model once with a smaller model for faster performance
+model = whisper.load_model("small", device=device)
 
 # Function to load system prompts from a JSON file
 def load_prompts(json_path="promptpicker.json"):
@@ -24,6 +36,7 @@ def load_prompts(json_path="promptpicker.json"):
 
 # Function to select a prompt
 def select_prompt(prompts):
+    logging.debug("Selecting system prompt...")
     print("Available System Prompts:")
     for idx, prompt in enumerate(prompts):
         print(f"{idx + 1}: {prompt['title']}")
@@ -32,16 +45,19 @@ def select_prompt(prompts):
 
 # Check if yt-dlp is installed, if not install it
 def check_install_yt_dlp():
+    logging.debug("Checking if yt-dlp is installed...")
     try:
         subprocess.run(["yt-dlp", "--version"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     except (subprocess.CalledProcessError, FileNotFoundError):
+        logging.debug("yt-dlp not found, installing...")
         subprocess.run([sys.executable, "-m", "pip", "install", "yt-dlp"], check=True)
 
 # Check if ffmpeg is installed, if not download and install it
 def check_install_ffmpeg():
+    logging.debug("Checking if ffmpeg is installed...")
     ffmpeg_installed = shutil.which("ffmpeg") is not None
     if not ffmpeg_installed:
-        print("ffmpeg not found, downloading...")
+        logging.debug("ffmpeg not found, downloading...")
         if platform.system() == "Windows":
             url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
             zip_path = "ffmpeg.zip"
@@ -62,7 +78,7 @@ def check_install_ffmpeg():
             subprocess.run(["brew", "install", "ffmpeg"], check=True)
         else:
             raise Exception("Unsupported OS for automatic ffmpeg installation")
-        print("ffmpeg installed")
+        logging.debug("ffmpeg installed")
 
 def find_ffmpeg_bin_path(root_dir):
     for root, dirs, files in os.walk(root_dir):
@@ -92,10 +108,10 @@ async def async_summarize_text(api_key, text, prompt, session, semaphore=None):
                 if 'choices' in response_data:
                     return response_data['choices'][0]['message']['content'].strip()
                 else:
-                    print(f"Unexpected response structure: {response_data}")
+                    logging.error(f"Unexpected response structure: {response_data}")
                     return ""
         except Exception as e:
-            print(f"Error summarizing text: {e}")
+            logging.error(f"Error summarizing text: {e}")
             return ""
 
 # Asynchronous function to generate a unique filename
@@ -121,18 +137,21 @@ async def generate_unique_filename(api_key, session, semaphore=None):
                     filename = response_data['choices'][0]['message']['content'].strip().replace(" ", "_")
                     return filename
                 else:
-                    print(f"Unexpected response structure: {response_data}")
+                    logging.error(f"Unexpected response structure: {response_data}")
                     return "default_filename"
         except Exception as e:
-            print(f"Error generating filename: {e}")
+            logging.error(f"Error generating filename: {e}")
             return "default_filename"
 
 # Transcribe the audio using Whisper model
 def transcribe_audio(audio_path):
+    logging.debug(f"Starting transcription for {audio_path}...")
     result = model.transcribe(audio_path)
+    logging.debug("Transcription completed.")
     return result["text"]
 
 def download_youtube_audio(youtube_url, random_number):
+    logging.debug(f"Downloading audio from YouTube URL: {youtube_url}")
     # Construct the output filename with the random number
     output_filename = f"input/youtube_audio_{random_number}.m4a"
     command = ['yt-dlp', '-f', 'm4a', '--output', output_filename, youtube_url]
@@ -141,59 +160,63 @@ def download_youtube_audio(youtube_url, random_number):
 
 # Convert video file to audio using ffmpeg
 def convert_video_to_audio(video_file, random_number):
+    logging.debug(f"Converting video file to audio: {video_file}")
     audio_file = f"input/video_audio_{random_number}.mp3"
     command = ['ffmpeg', '-i', video_file, '-q:a', '0', '-map', 'a', audio_file]
     subprocess.run(command, check=True)
     return audio_file
 
-def split_text_into_chunks_to_files(text, chunk_size=1500, overlap=50):
-    tokens = text.split()
-    chunk_files = []
-    start = 0
-    while start < len(tokens):
-        end = start + chunk_size
-        chunk = " ".join(tokens[start:end])
-        temp_file = tempfile.NamedTemporaryFile(delete=False, mode='w+', encoding='utf-8')
-        temp_file.write(chunk)
-        temp_file.close()
-        chunk_files.append(temp_file.name)
-        start += chunk_size - overlap
-    return chunk_files
+def split_text_into_chunks(text, max_tokens=1500, overlap=100):
+    logging.debug("Splitting text into chunks...")
+    sentences = nltk.sent_tokenize(text)
+    chunks = []
+    current_chunk = []
+    current_token_count = 0
 
-async def summarize_chunk_files(api_key, chunk_files, prompt):
+    for sentence in sentences:
+        sentence_tokens = sentence.split()
+        if current_token_count + len(sentence_tokens) > max_tokens:
+            chunks.append(" ".join(current_chunk))
+            current_chunk = current_chunk[-overlap:]  # Include overlap
+            current_token_count = len(current_chunk)
+        current_chunk.extend(sentence_tokens)
+        current_token_count += len(sentence_tokens)
+
+    # Add the last chunk if it's not empty
+    if current_chunk:
+        chunks.append(" ".join(current_chunk))
+
+    logging.debug(f"Created {len(chunks)} chunks.")
+    return chunks
+
+async def summarize_chunk_files(api_key, chunk_texts, prompt):
+    logging.debug("Starting chunk summarization...")
     summaries = []
     semaphore = asyncio.Semaphore(5)
     async with aiohttp.ClientSession() as session:
-        for file_path in chunk_files:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                chunk = f.read()
+        for chunk in chunk_texts:
             summary = await async_summarize_text(api_key, chunk, prompt, session, semaphore)
             summaries.append(summary)
+    logging.debug("Chunk summarization completed.")
     return summaries
 
 async def hierarchical_summarize(api_key, text, prompt):
-    # Step 1: Initial chunking to files and summarization
-    chunk_files = split_text_into_chunks_to_files(text)
-    first_level_summaries = await summarize_chunk_files(api_key, chunk_files, prompt)
-    
-    # Clean up temporary files
-    for file_path in chunk_files:
-        os.remove(file_path)
-    
-    # Step 2: Combine summaries
+    logging.debug("Starting hierarchical summarization...")
+    # Stage 1: Initial chunking and summarization
+    chunk_texts = split_text_into_chunks(text, max_tokens=10000, overlap=1000)
+    first_level_summaries = await summarize_chunk_files(api_key, chunk_texts, "Create a high-level overview of the main topics in this transcript:")
+
+    # Combine first-level summaries
     combined_summary = " ".join(first_level_summaries)
-    
-    # Step 3: Check if combined summary exceeds token limit
-    if len(combined_summary.split()) > 3000:  # Adjust this limit accordingly
-        combined_chunk_files = split_text_into_chunks_to_files(combined_summary)
-        final_summary = await summarize_chunk_files(api_key, combined_chunk_files, prompt)
-        
-        # Clean up temporary files
-        for file_path in combined_chunk_files:
-            os.remove(file_path)
-        
+
+    # Stage 2: Detailed chunking and summarization if necessary
+    if len(combined_summary.split()) > 3000:
+        detailed_chunk_texts = split_text_into_chunks(combined_summary, max_tokens=3000, overlap=200)
+        final_summary = await summarize_chunk_files(api_key, detailed_chunk_texts, f"Summarize this section in detail, considering the following overview: {combined_summary}")
+        logging.debug("Hierarchical summarization completed.")
         return " ".join(final_summary)
     else:
+        logging.debug("Hierarchical summarization completed.")
         return combined_summary
 
 # Main function to orchestrate the processing
@@ -241,7 +264,7 @@ async def main(api_key):
         return
 
     if audio_file:
-        print(f"Transcribing audio file: {audio_file}")
+        logging.debug(f"Transcribing audio file: {audio_file}")
         transcript = transcribe_audio(audio_file)
         transcript_file = os.path.join("output", f"transcript_{random_number}.txt")
         with open(transcript_file, "w", encoding="utf-8") as f:
@@ -249,22 +272,22 @@ async def main(api_key):
         text_file = transcript_file
 
     if text_file:
-        print(f"Reading text file: {text_file}")
+        logging.debug(f"Reading text file: {text_file}")
         with open(text_file, 'r', encoding='utf-8') as f:
             transcript = f.read()
     else:
-        print("No audio or text file found in the directory.")
+        logging.error("No audio or text file found in the directory.")
         return
 
     # Save the transcript and ask for user confirmation before summarizing
     with open(os.path.join("output", f"transcript_{random_number}.txt"), "w", encoding="utf-8") as f:
         f.write(transcript)
-    print(f"Transcript saved to output/transcript_{random_number}.txt")
+    logging.debug(f"Transcript saved to output/transcript_{random_number}.txt")
     
     # Ask user if they want to summarize the transcript
     summarize_choice = input("Do you want to summarize the transcript? (y/n): ").strip().lower()
     if summarize_choice != 'y':
-        print("Skipping summarization.")
+        logging.debug("Skipping summarization.")
         return
 
     # Summarize the transcript using hierarchical summarization
@@ -277,13 +300,19 @@ async def main(api_key):
     if summary:
         with open(os.path.join("output", f"{filename}.txt"), "w", encoding="utf-8") as f:
             f.write(summary)
-        print(f"Summary saved to output/{filename}.txt")
+        logging.debug(f"Summary saved to output/{filename}.txt")
     else:
-        print("Failed to generate a summary.")
+        logging.error("Failed to generate a summary.")
 
 if __name__ == "__main__":
+    import cProfile
+    import pstats
+
     parser = argparse.ArgumentParser(description="LoSS - Lots of Stuff Summarizer")
     parser.add_argument("--api-key", required=True, help="Your OpenAI API key")
     args = parser.parse_args()
     
-    asyncio.run(main(args.api_key))
+    with cProfile.Profile() as pr:
+        asyncio.run(main(args.api_key))
+    
+    pr.print_stats()
