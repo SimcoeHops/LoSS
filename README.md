@@ -1,4 +1,4 @@
-# LoSS - Lots of Stuff Summarizer 📜✨
+# LoSS - Lots of Stuff Summarizer 📜
 
 Welcome to **LoSS** (Lots of Stuff Summarizer)! 
 
