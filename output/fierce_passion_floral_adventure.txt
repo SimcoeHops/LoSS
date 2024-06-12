@@ -1,0 +1,30 @@
+**Game Overview**:
+The board game is focused on managing economic factors and making strategic decisions to control inflation rates and interest rates. Players will need to analyze and respond to changing economic conditions to succeed in the game.
+
+**Components**:
+- Game board depicting economic indicators and rates.
+- Economic data cards showing inflation and interest rates.
+- Player tokens to represent each player's decisions and strategies.
+
+**Setup Instructions**:
+1. Place the game board in the center of the playing area.
+2. Distribute economic data cards to each player.
+3. Each player selects a player token to represent them on the board.
+
+**Gameplay Mechanics**:
+
+**Player Actions**:
+- Players can adjust interest rates based on economic conditions.
+- Analyze inflation data to make strategic decisions.
+- Make choices to influence economic factors on the board.
+
+**Winning Conditions**:
+A player wins by effectively managing inflation and interest rates to achieve a stable economic environment. The player who maintains the most balanced economic conditions wins the game.
+
+**Strategy Tips**:
+- Monitor inflation rates closely to make informed decisions.
+- Adjust interest rates strategically to control economic stability.
+- Plan ahead to anticipate changes in economic conditions.
+
+**Conclusion**:
+In this economic-themed board game, players take on the role of managing inflation and interest rates to achieve stability. By analyzing economic data, making strategic decisions, and adapting to changing conditions, players aim to create a balanced economic environment to win the game. Strategic planning, monitoring economic indicators, and adapting to fluctuations are key elements to succeed in this game.
